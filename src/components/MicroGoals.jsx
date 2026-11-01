@@ -10,6 +10,7 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
   const [target, setTarget] = useState(1);
   const [catId, setCatId] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(false);
 
   const allToday = useMemo(() => tasks.rows.filter((t) => t.task_date === today), [tasks.rows, today]);
   const todays = useMemo(() => allToday.filter((t) => !filterCat || t.category_id === filterCat), [allToday, filterCat]);
@@ -38,7 +39,13 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
     setAdding(true);
     const { data, error } = await supabase
       .from('micro_tasks')
-      .insert({ title: title.trim(), target_count: Math.max(1, Number(target) || 1), category_id: catId ?? filterCat ?? null, task_date: today })
+      .insert({ 
+        title: title.trim(), 
+        target_count: Math.max(1, Number(target) || 1), 
+        category_id: catId ?? filterCat ?? null, 
+        task_date: today,
+        is_recurring: isRecurring // <-- ΝΕΑ ΓΡΑΜΜΗ
+      })
       .select()
       .single();
     setAdding(false);
@@ -46,6 +53,7 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
     tasks.upsert(data);
     setTitle('');
     setTarget(1);
+    setIsRecurring(false);
   }
 
   async function copyYesterday() {
@@ -112,6 +120,17 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
               aria-label="Ποσοτικός στόχος"
             />
             <CategorySelect className="w-40" categories={categories} value={catId ?? filterCat} onChange={setCatId} />
+
+            <label className="flex cursor-pointer items-center space-x-2 whitespace-nowrap rounded-lg border border-navy-100 bg-navy-50/50 px-3 py-1.5 transition-colors hover:bg-navy-50">
+              <input
+                type="checkbox"
+                checked={isRecurring}
+                onChange={(e) => setIsRecurring(e.target.checked)}
+                className="h-4 w-4 rounded border-navy-200 text-sage-500 focus:ring-sage-500"
+              />
+              <span className="text-sm text-navy-700">Κάθε μέρα</span>
+            </label>
+            
             <Button type="submit" disabled={adding || !title.trim()}>
               <Plus className="h-4 w-4" /> Προσθήκη
             </Button>
