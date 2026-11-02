@@ -108,7 +108,7 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               className="input w-20 text-center"
               type="number"
@@ -121,7 +121,7 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
             />
             <CategorySelect className="w-40" categories={categories} value={catId ?? filterCat} onChange={setCatId} />
 
-            <label className="flex cursor-pointer items-center space-x-2 whitespace-nowrap rounded-lg border border-navy-100 bg-navy-50/50 px-3 py-1.5 transition-colors hover:bg-navy-50">
+            <label className="flex cursor-pointer items-center space-x-2 rounded-lg border border-navy-100 bg-navy-50/50 px-3 py-1.5 transition-colors hover:bg-navy-50">
               <input
                 type="checkbox"
                 checked={isRecurring}

@@ -82,7 +82,7 @@ export default function LeadsTracker({ leads, profMap, me, isAdmin }) {
 
         <form onSubmit={add} className="mb-5 space-y-2">
           <input className="input" placeholder="Όνομα / επιχείρηση" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input className="input" placeholder="Τηλέφωνο" inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             <input className="input" placeholder="Σημείωση" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
           </div>

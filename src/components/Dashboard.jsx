@@ -81,7 +81,7 @@ export default function Dashboard() {
       )}
       <Header me={me} live={live} onProfile={() => setShowProfile(true)} />
 
-      <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6">
+      <main className="mx-auto max-w-7xl space-y-8 px-4 pt-6 pb-24 sm:px-6 sm:py-8">
         <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="animate-fadeIn">
             <p className="text-sm capitalize text-navy-400">{formatLong(todayStr())}</p>
@@ -90,19 +90,22 @@ export default function Dashboard() {
             </h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Chip active={!filterCat} onClick={() => setFilterCat(null)}>
-              Όλα
-            </Chip>
-            {categories.rows.map((c) => (
-              <Chip key={c.id} active={filterCat === c.id} onClick={() => setFilterCat(filterCat === c.id ? null : c.id)}>
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: c.color }} />
-                {c.name}
+          {/* Mobile-friendly Swipeable Categories */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:flex-wrap sm:pb-0" style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
+            <div className="flex shrink-0 gap-1.5">
+              <Chip active={!filterCat} onClick={() => setFilterCat(null)}>
+                Όλα
               </Chip>
-            ))}
+              {categories.rows.map((c) => (
+                <Chip key={c.id} active={filterCat === c.id} onClick={() => setFilterCat(filterCat === c.id ? null : c.id)}>
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: c.color }} />
+                  <span className="whitespace-nowrap">{c.name}</span>
+                </Chip>
+              ))}
+            </div>
             <button
               onClick={() => setShowCats(true)}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-navy-400 transition hover:bg-navy-50 hover:text-navy-700"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-navy-400 transition hover:bg-navy-50 hover:text-navy-700"
             >
               <Tag className="h-3.5 w-3.5" /> Κατηγορίες
             </button>

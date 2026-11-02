@@ -10,7 +10,7 @@ export default function Header({ me, live, onProfile }) {
             <Compass className="h-[18px] w-[18px]" />
           </span>
           <div className="leading-tight">
-            <p className="text-[15px] font-semibold text-navy-800">Agency HQ</p>
+            <p className="text-[14px] sm:text-[15px] font-semibold text-navy-800">Agency HQ</p>
             <p className="text-[11px] text-navy-400">Team command center</p>
           </div>
         </div>
