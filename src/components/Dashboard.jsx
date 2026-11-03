@@ -10,6 +10,7 @@ import Header from './Header';
 import StatsRow from './StatsRow';
 import MacroGoals from './MacroGoals';
 import MicroGoals from './MicroGoals';
+import TaskBacklog from './TaskBacklog';
 import DailySync from './DailySync';
 import LeadsTracker from './LeadsTracker';
 import ProfileModal from './ProfileModal';
@@ -119,6 +120,7 @@ export default function Dashboard() {
         <div className="grid gap-8 lg:grid-cols-3">
           <div className="space-y-8 lg:col-span-2">
             <MicroGoals tasks={tasks} categories={categories.rows} catMap={catMap} profMap={profMap} filterCat={filterCat} me={me} isAdmin={isAdmin} />
+            <TaskBacklog tasks={tasks} catMap={catMap} me={me} isAdmin={isAdmin} />
             <DailySync notes={notes} profMap={profMap} me={me} isAdmin={isAdmin} />
           </div>
           <aside>

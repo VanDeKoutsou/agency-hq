@@ -11,8 +11,9 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
   const [catId, setCatId] = useState(null);
   const [adding, setAdding] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
+  const [isBacklog, setIsBacklog] = useState(false);
 
-  const allToday = useMemo(() => tasks.rows.filter((t) => t.task_date === today), [tasks.rows, today]);
+  const allToday = useMemo(() => tasks.rows.filter((t) => t.task_date === today && !t.is_backlog), [tasks.rows, today]);
   const todays = useMemo(() => allToday.filter((t) => !filterCat || t.category_id === filterCat), [allToday, filterCat]);
 
   const totalTarget = allToday.reduce((s, t) => s + t.target_count, 0);
@@ -44,7 +45,8 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
         target_count: Math.max(1, Number(target) || 1), 
         category_id: catId ?? filterCat ?? null, 
         task_date: today,
-        is_recurring: isRecurring // <-- ΝΕΑ ΓΡΑΜΜΗ
+        is_recurring: isRecurring,
+        is_backlog: isBacklog
       })
       .select()
       .single();
@@ -54,6 +56,7 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
     setTitle('');
     setTarget(1);
     setIsRecurring(false);
+    setIsBacklog(false);
   }
 
   async function copyYesterday() {
@@ -121,6 +124,7 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
             />
             <CategorySelect className="w-40" categories={categories} value={catId ?? filterCat} onChange={setCatId} />
 
+            {/* Checkbox: Κάθε μέρα (Recurring) */}
             <label className="flex cursor-pointer items-center space-x-2 rounded-lg border border-navy-100 bg-navy-50/50 px-3 py-1.5 transition-colors hover:bg-navy-50">
               <input
                 type="checkbox"
@@ -129,6 +133,17 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
                 className="h-4 w-4 rounded border-navy-200 text-sage-500 focus:ring-sage-500"
               />
               <span className="text-sm text-navy-700">Κάθε μέρα</span>
+            </label>
+            
+            {/* ΝΕΟ Checkbox: Για αργότερα (Backlog) */}
+            <label className="flex cursor-pointer items-center space-x-2 rounded-lg border border-navy-100 bg-navy-50/50 px-3 py-1.5 transition-colors hover:bg-navy-50">
+              <input
+                type="checkbox"
+                checked={isBacklog}
+                onChange={(e) => setIsBacklog(e.target.checked)}
+                className="h-4 w-4 rounded border-navy-200 text-sand-500 focus:ring-sand-500"
+              />
+              <span className="text-sm text-navy-700">Για αργότερα</span>
             </label>
             
             <Button type="submit" disabled={adding || !title.trim()}>
