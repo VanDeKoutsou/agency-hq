@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, ListChecks, Minus, Plus, Trash2 } from 'lucide-react';
+import { Check, Copy, ListChecks, Minus, Plus, Trash2, History, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { addDays, fireConfetti, notify, todayStr } from '../lib/utils';
 import { AnimatedNumber, Button, Card, CategoryBadge, CategorySelect, EmptyState, ProgressBar, SectionTitle, cx } from './ui';
+import CompletedTasksModal from './CompletedTasksModal';
+import EditTaskModal from './EditTaskModal'; // Προσθήκη του νέου Modal
 
 export default function MicroGoals({ tasks, categories, catMap, profMap, filterCat, me, isAdmin }) {
   const today = todayStr();
@@ -12,16 +14,29 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
   const [adding, setAdding] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
   const [isBacklog, setIsBacklog] = useState(false);
+  
+  const [isCompletedModalOpen, setIsCompletedModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState(null); // Κρατάει το task που επεξεργαζόμαστε
 
   const allToday = useMemo(() => tasks.rows.filter((t) => t.task_date === today && !t.is_backlog), [tasks.rows, today]);
-  const todays = useMemo(() => allToday.filter((t) => !filterCat || t.category_id === filterCat), [allToday, filterCat]);
+  const todays = useMemo(() => {
+    return allToday
+      .filter((t) => !filterCat || t.category_id === filterCat)
+      .sort((a, b) => {
+        const aDone = a.current_count >= a.target_count;
+        const bDone = b.current_count >= b.target_count;
+        
+        if (aDone && !bDone) return 1;  // Αν το 'a' ολοκληρώθηκε, πάει στο τέλος
+        if (!aDone && bDone) return -1; // Αν το 'b' ολοκληρώθηκε, το 'a' μένει ψηλά
+        return 0; // Διαφορετικά διατηρούν την αρχική τους σειρά
+      });
+  }, [allToday, filterCat]);
 
   const totalTarget = allToday.reduce((s, t) => s + t.target_count, 0);
   const totalDone = allToday.reduce((s, t) => s + Math.min(t.current_count, t.target_count), 0);
   const dayPct = totalTarget ? Math.round((totalDone / totalTarget) * 100) : 0;
   const allComplete = allToday.length > 0 && allToday.every((t) => t.current_count >= t.target_count);
 
-  // confetti όταν ολοκληρώνεται το 100% των ημερήσιων tasks (και από συναδέλφους, real-time)
   const prev = useRef(null);
   useEffect(() => {
     if (tasks.loading) return;
@@ -100,7 +115,18 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
         icon={ListChecks}
         title="Micro Goals · Σήμερα"
         hint="Κοινή λίστα ομάδας · μετράει η συνολική πρόοδος"
-        action={<DayRing pct={dayPct} complete={allComplete} />}
+        action={
+          <div className="flex items-center gap-4">
+            <DayRing pct={dayPct} complete={allComplete} />
+            <button 
+              onClick={() => setIsCompletedModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-navy-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-700 shadow-soft transition hover:border-sage-400 hover:text-sage-600"
+            >
+              <History className="h-4 w-4" />
+              <span className="hidden sm:inline">Ολοκληρωμένα</span>
+            </button>
+          </div>
+        }
       />
 
       <Card className="p-4 sm:p-5">
@@ -120,32 +146,16 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               title="Ποσοτικός στόχος"
-              aria-label="Ποσοτικός στόχος"
             />
             <CategorySelect className="w-40" categories={categories} value={catId ?? filterCat} onChange={setCatId} />
-
-            {/* Checkbox: Κάθε μέρα (Recurring) */}
             <label className="flex cursor-pointer items-center space-x-2 rounded-lg border border-navy-100 bg-navy-50/50 px-3 py-1.5 transition-colors hover:bg-navy-50">
-              <input
-                type="checkbox"
-                checked={isRecurring}
-                onChange={(e) => setIsRecurring(e.target.checked)}
-                className="h-4 w-4 rounded border-navy-200 text-sage-500 focus:ring-sage-500"
-              />
+              <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} className="h-4 w-4 rounded border-navy-200 text-sage-500 focus:ring-sage-500" />
               <span className="text-sm text-navy-700">Κάθε μέρα</span>
             </label>
-            
-            {/* ΝΕΟ Checkbox: Για αργότερα (Backlog) */}
             <label className="flex cursor-pointer items-center space-x-2 rounded-lg border border-navy-100 bg-navy-50/50 px-3 py-1.5 transition-colors hover:bg-navy-50">
-              <input
-                type="checkbox"
-                checked={isBacklog}
-                onChange={(e) => setIsBacklog(e.target.checked)}
-                className="h-4 w-4 rounded border-navy-200 text-sand-500 focus:ring-sand-500"
-              />
+              <input type="checkbox" checked={isBacklog} onChange={(e) => setIsBacklog(e.target.checked)} className="h-4 w-4 rounded border-navy-200 text-sand-500 focus:ring-sand-500" />
               <span className="text-sm text-navy-700">Για αργότερα</span>
             </label>
-            
             <Button type="submit" disabled={adding || !title.trim()}>
               <Plus className="h-4 w-4" /> Προσθήκη
             </Button>
@@ -153,9 +163,7 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
         </form>
 
         {todays.length === 0 ? (
-          <EmptyState icon={ListChecks} title={filterCat ? 'Κανένα task σε αυτή την κατηγορία' : 'Δεν υπάρχουν tasks για σήμερα'} hint="Πρόσθεσε το πρώτο task ή ξεκίνα από τη χθεσινή λίστα.">
-            {null}
-          </EmptyState>
+          <EmptyState icon={ListChecks} title={filterCat ? 'Κανένα task σε αυτή την κατηγορία' : 'Δεν υπάρχουν tasks για σήμερα'} hint="Πρόσθεσε το πρώτο task ή ξεκίνα από τη χθεσινή λίστα." />
         ) : (
           <ul className="space-y-2">
             {todays.map((t) => (
@@ -164,10 +172,12 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
                 task={t}
                 cat={catMap[t.category_id]}
                 author={profMap[t.last_updated_by]?.full_name}
+                canEdit={isAdmin || t.created_by === me.id}
                 canDelete={isAdmin || t.created_by === me.id}
                 onAdjust={adjust}
                 onToggle={toggle}
                 onDelete={del}
+                onEdit={() => setEditingTask(t)} // Περνάμε τη συνάρτηση επεξεργασίας
               />
             ))}
           </ul>
@@ -181,11 +191,29 @@ export default function MicroGoals({ tasks, categories, catMap, profMap, filterC
           </div>
         )}
       </Card>
+
+      <CompletedTasksModal 
+        isOpen={isCompletedModalOpen} 
+        onClose={() => setIsCompletedModalOpen(false)} 
+        tasks={tasks} 
+        catMap={catMap} 
+        me={me} 
+        isAdmin={isAdmin} 
+      />
+
+      {/* Το νέο Modal Επεξεργασίας */}
+      <EditTaskModal 
+        task={editingTask}
+        isOpen={!!editingTask}
+        onClose={() => setEditingTask(null)}
+        categories={categories}
+        tasks={tasks}
+      />
     </section>
   );
 }
 
-function TaskRow({ task, cat, author, canDelete, onAdjust, onToggle, onDelete }) {
+function TaskRow({ task, cat, author, canEdit, canDelete, onAdjust, onToggle, onDelete, onEdit }) {
   const done = task.current_count >= task.target_count;
   const single = task.target_count === 1;
   const progress = Math.round((task.current_count / task.target_count) * 100);
@@ -199,7 +227,6 @@ function TaskRow({ task, cat, author, canDelete, onAdjust, onToggle, onDelete })
     >
       <button
         onClick={() => onToggle(task)}
-        aria-label={done ? 'Επαναφορά' : 'Ολοκλήρωση'}
         className={cx(
           'grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 transition-all duration-300',
           done ? 'border-sage-500 bg-sage-500 text-white' : 'border-navy-200 text-transparent hover:border-sage-400 hover:text-sage-300'
@@ -220,29 +247,41 @@ function TaskRow({ task, cat, author, canDelete, onAdjust, onToggle, onDelete })
       </div>
 
       {!single && (
-        <div className="flex items-center gap-1.5">
-          <Button variant="soft" size="icon" onClick={() => onAdjust(task, -1)} aria-label="Μείωση">
+        <div className="flex items-center gap-1.5 mr-2">
+          <Button variant="soft" size="icon" onClick={() => onAdjust(task, -1)}>
             <Minus className="h-3.5 w-3.5" />
           </Button>
           <span className="min-w-[3.2rem] text-center text-sm font-semibold tabular-nums text-navy-700">
             <AnimatedNumber value={task.current_count} duration={300} />
             <span className="font-normal text-navy-300">/{task.target_count}</span>
           </span>
-          <Button variant={done ? 'sage' : 'soft'} size="icon" onClick={() => onAdjust(task, 1)} aria-label="Αύξηση">
+          <Button variant={done ? 'sage' : 'soft'} size="icon" onClick={() => onAdjust(task, 1)}>
             <Plus className="h-3.5 w-3.5" />
           </Button>
         </div>
       )}
 
-      {canDelete && (
-        <button
-          onClick={() => onDelete(task)}
-          className="rounded-lg p-1.5 text-navy-300 transition hover:bg-rose-50 hover:text-rose-500 sm:opacity-0 sm:group-hover:opacity-100"
-          aria-label="Διαγραφή"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      )}
+      {/* Κουμπιά Επεξεργασίας & Διαγραφής */}
+      <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+        {canEdit && (
+          <button
+            onClick={() => onEdit(task)}
+            className="rounded-lg p-1.5 text-navy-300 transition hover:bg-sage-50 hover:text-sage-600"
+            title="Επεξεργασία"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+        )}
+        {canDelete && (
+          <button
+            onClick={() => onDelete(task)}
+            className="rounded-lg p-1.5 text-navy-300 transition hover:bg-rose-50 hover:text-rose-500"
+            title="Διαγραφή"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+      </div>
     </li>
   );
 }

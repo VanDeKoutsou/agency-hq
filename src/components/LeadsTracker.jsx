@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Phone, PhoneCall, Plus, Trash2, Users } from 'lucide-react';
+import { Phone, PhoneCall, Plus, Trash2, Users, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fireConfetti, notify, todayStr } from '../lib/utils';
 import { Button, Card, EmptyState, SectionTitle, cx } from './ui';
@@ -15,7 +15,7 @@ const OPEN = ['new', 'follow_up'];
 
 export default function LeadsTracker({ leads, profMap, me, isAdmin }) {
   const today = todayStr();
-  const [form, setForm] = useState({ name: '', phone: '', note: '' });
+  const [form, setForm] = useState({ name: '', phone: '', note: '', callDate: '' });
   const [busy, setBusy] = useState(false);
 
   const { todays, carry } = useMemo(
@@ -33,15 +33,51 @@ export default function LeadsTracker({ leads, profMap, me, isAdmin }) {
     e.preventDefault();
     if (!form.name.trim()) return;
     setBusy(true);
+    
+    // 1. Δημιουργία του Lead
     const { data, error } = await supabase
       .from('leads')
-      .insert({ name: form.name.trim(), phone: form.phone.trim() || null, note: form.note.trim() || null, lead_date: today })
+      .insert({ 
+        name: form.name.trim(), 
+        phone: form.phone.trim() || null, 
+        note: form.note.trim() || null, 
+        lead_date: today,
+        call_date: form.callDate || null // Αποθήκευση της ημερομηνίας
+      })
       .select()
       .single();
-    setBusy(false);
-    if (error) return notify(error.message);
+
+    if (error) {
+      setBusy(false);
+      return notify(error.message);
+    }
+    
     leads.upsert(data);
-    setForm({ name: '', phone: '', note: '' });
+
+    // 2. Αυτοματισμός: Δημιουργία Micro Task αν υπάρχει ημερομηνία!
+    if (form.callDate) {
+      const { error: taskError } = await supabase
+        .from('micro_tasks')
+        .insert({
+          title: `📞 Call: ${form.name.trim()}`,
+          target_count: 1,
+          task_date: form.callDate, // Μπαίνει ακριβώς την ημέρα που επιλέξαμε
+          is_recurring: false,
+          is_backlog: false
+        });
+        
+      if (taskError) {
+        notify("Το Lead αποθηκεύτηκε, αλλά απέτυχε η δημιουργία του Task.");
+      } else {
+        // Αν το ραντεβού είναι για σήμερα, κάνουμε ένα μικρό reload για να εμφανιστεί το task άμεσα στο UI
+        if (form.callDate === today) {
+           window.location.reload(); 
+        }
+      }
+    }
+
+    setBusy(false);
+    setForm({ name: '', phone: '', note: '', callDate: '' });
   }
 
   async function setStatus(lead, status) {
@@ -82,10 +118,23 @@ export default function LeadsTracker({ leads, profMap, me, isAdmin }) {
 
         <form onSubmit={add} className="mb-5 space-y-2">
           <input className="input" placeholder="Όνομα / επιχείρηση" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input className="input" placeholder="Τηλέφωνο" inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            <input className="input" placeholder="Σημείωση" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+            {/* Νέο πεδίο ημερομηνίας */}
+            <div className="relative">
+              <input 
+                className="input w-full text-navy-600" 
+                type="date" 
+                value={form.callDate} 
+                onChange={(e) => setForm({ ...form, callDate: e.target.value })}
+                title="Ημερομηνία Ραντεβού/Call (Προαιρετικό)"
+              />
+            </div>
           </div>
+          
+          <input className="input" placeholder="Σημείωση" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+          
           <Button type="submit" className="w-full justify-center" disabled={busy || !form.name.trim()}>
             <Plus className="h-4 w-4" /> Προσθήκη lead
           </Button>
@@ -111,16 +160,30 @@ export default function LeadsTracker({ leads, profMap, me, isAdmin }) {
 
 function LeadRow({ lead, author, canDelete, onStatus, onDelete }) {
   const s = STATUS[lead.status];
+  
+  // Μετατροπή της ημερομηνίας σε όμορφο format για να φαίνεται στη λίστα (πχ. 25/10/2023)
+  const displayDate = lead.call_date ? new Date(lead.call_date).toLocaleDateString('el-GR') : null;
+
   return (
     <li className="group animate-fadeIn rounded-xl border border-navy-100 bg-white p-3 transition-all hover:border-navy-200 hover:shadow-soft">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-navy-800">{lead.name}</p>
-          {lead.phone && (
-            <a href={`tel:${lead.phone}`} className="mt-0.5 inline-flex items-center gap-1 text-xs text-navy-500 hover:text-navy-800">
-              <Phone className="h-3 w-3" /> {lead.phone}
-            </a>
-          )}
+          
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
+            {lead.phone && (
+              <a href={`tel:${lead.phone}`} className="inline-flex items-center gap-1 text-xs text-navy-500 hover:text-navy-800">
+                <Phone className="h-3 w-3" /> {lead.phone}
+              </a>
+            )}
+            {/* Εμφάνιση της ημερομηνίας του ραντεβού (Αν υπάρχει) */}
+            {displayDate && (
+              <span className="inline-flex items-center gap-1 text-xs text-sage-600 font-medium bg-sage-50 px-1.5 py-0.5 rounded">
+                <Calendar className="h-3 w-3" /> {displayDate}
+              </span>
+            )}
+          </div>
+
           {lead.note && <p className="mt-1 text-xs text-navy-400">{lead.note}</p>}
         </div>
         {canDelete && (
