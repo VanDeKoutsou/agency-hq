@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Tag, LayoutDashboard, Briefcase, TrendingUp, CreditCard, Wallet, Plus, X, Trash2, PieChart, Target } from 'lucide-react';
+import { Tag, LayoutDashboard, Briefcase, TrendingUp, CreditCard, Wallet, Plus, X, Trash2, PieChart, Target, Timer } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase, isDemo } from '../lib/supabase';
 import { DB_KEY, USER_KEY } from '../lib/mockSupabase';
@@ -16,6 +16,7 @@ import LeadsTracker from './LeadsTracker';
 import ProfileModal from './ProfileModal';
 import CategoryManager from './CategoryManager';
 import ClientHub from './ClientHub';
+import FocusArea from './FocusArea';
 
 export default function Dashboard() {
   const { user, profile } = useAuth();
@@ -74,16 +75,14 @@ export default function Dashboard() {
   const totalExpenses = totalClientCosts + totalAgencyCosts;
   const netProfit = totalMRR - totalExpenses;
 
-  // --- ΝΕΟ: ΕΦΑΠΑΞ & CONVERSION ΥΠΟΛΟΓΙΣΜΟΙ ---
+  // --- ΕΦΑΠΑΞ & CONVERSION ΥΠΟΛΟΓΙΣΜΟΙ ---
   const now = new Date();
-  
-  // Υπολογισμός Εφάπαξ Εσόδων του Τρέχοντα Μήνα
+
   const currentMonthOneOff = wonClients.filter(c => {
     const d = new Date(c.created_at);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   }).reduce((sum, c) => sum + (Number(c.setup_fee) || 0) + (Number(c.extra_features_fee) || 0), 0);
 
-  // Conversion Rate (Ποσοστό Κλεισίματος Τελευταίων 30 Ημερών)
   const leads30d = leads.rows.filter(l => l.lead_date >= since30);
   const wonLeads30d = leads30d.filter(l => l.status === 'won');
   const conversionRate = leads30d.length > 0 ? Math.round((wonLeads30d.length / leads30d.length) * 100) : 0;
@@ -100,7 +99,7 @@ export default function Dashboard() {
 
       <main className="mx-auto max-w-7xl space-y-8 px-4 pt-6 pb-24 sm:px-6 sm:py-8">
         
-        {/* Header & Tabs */}
+        {/* Header & Mobile-First Tabs */}
         <section className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="animate-fadeIn">
             <p className="text-sm capitalize text-navy-400">{formatLong(todayStr())}</p>
@@ -109,18 +108,24 @@ export default function Dashboard() {
             </h1>
           </div>
 
-          <div className="flex items-center rounded-xl bg-navy-50/70 p-1.5 shadow-sm border border-navy-100/50">
+          <div className="grid grid-cols-3 sm:flex items-center gap-1 rounded-xl bg-navy-50/70 p-1.5 shadow-sm border border-navy-100/50 w-full sm:w-auto">
             <button
               onClick={() => setActiveTab('dashboard')}
-              className={cx('flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200', activeTab === 'dashboard' ? 'bg-white text-navy-800 shadow-soft border border-navy-100' : 'text-navy-500 hover:text-navy-700 hover:bg-navy-50')}
+              className={cx('flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg px-2 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all duration-200', activeTab === 'dashboard' ? 'bg-white text-navy-800 shadow-soft border border-navy-100' : 'text-navy-500 hover:text-navy-700 hover:bg-navy-50')}
             >
-              <LayoutDashboard className="h-4 w-4" /> Dashboard
+              <LayoutDashboard className="h-4 w-4 shrink-0" /> <span className="truncate">Dashboard</span>
             </button>
             <button
               onClick={() => setActiveTab('clients')}
-              className={cx('flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200', activeTab === 'clients' ? 'bg-white text-navy-800 shadow-soft border border-navy-100' : 'text-navy-500 hover:text-navy-700 hover:bg-navy-50')}
+              className={cx('flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg px-2 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all duration-200', activeTab === 'clients' ? 'bg-white text-navy-800 shadow-soft border border-navy-100' : 'text-navy-500 hover:text-navy-700 hover:bg-navy-50')}
             >
-              <Briefcase className="h-4 w-4" /> Client Hub
+              <Briefcase className="h-4 w-4 shrink-0" /> <span className="truncate">Clients</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('focus')}
+              className={cx('flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg px-2 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all duration-200', activeTab === 'focus' ? 'bg-white text-navy-800 shadow-soft border border-navy-100' : 'text-navy-500 hover:text-navy-700 hover:bg-navy-50')}
+            >
+              <Timer className="h-4 w-4 shrink-0" /> <span className="truncate">Focus</span>
             </button>
           </div>
         </section>
@@ -162,7 +167,7 @@ export default function Dashboard() {
                   </div>
                 </section>
 
-                {/* --- ΝΕΟ: ΥΠΟ-ΠΙΝΑΚΑΣ ΕΦΑΠΑΞ & ΑΠΟΔΟΣΗΣ ΠΩΛΗΣΕΩΝ --- */}
+                {/* ΥΠΟ-ΠΙΝΑΚΑΣ ΕΦΑΠΑΞ & ΑΠΟΔΟΣΗΣ ΠΩΛΗΣΕΩΝ */}
                 <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="rounded-xl bg-navy-50/50 border border-navy-100 p-3.5 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -222,9 +227,14 @@ export default function Dashboard() {
               </aside>
             </div>
           </div>
-        ) : (
+        ) : activeTab === 'clients' ? (
           <ClientHub leads={leads} me={me} isAdmin={isAdmin} />
-        )}
+        ) : null}
+
+        {/* Μένει πάντα mounted για να μην σταματάει το Spotify & το Χρονόμετρο */}
+        <div className={activeTab === 'focus' ? 'block' : 'hidden'}>
+          <FocusArea tasks={tasks} isActive={activeTab === 'focus'} />
+        </div>
       </main>
 
       <ProfileModal open={showProfile} onClose={() => setShowProfile(false)} me={me} profiles={profiles} isAdmin={isAdmin} />
