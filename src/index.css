@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -37,4 +39,9 @@ body > iframe {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
+}
+
+.font-timer {
+  font-family: 'Outfit', sans-serif;
+  font-variant-numeric: tabular-nums;
 }

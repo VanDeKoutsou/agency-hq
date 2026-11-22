@@ -11,6 +11,7 @@ import {
   Maximize2,
   Minimize2,
   Image as ImageIcon,
+  Upload,
   X,
 } from 'lucide-react';
 import { notify, todayStr } from '../lib/utils';
@@ -67,6 +68,29 @@ function toSpotifyEmbed(url) {
   return `https://open.spotify.com/embed/${match[1]}/${match[2]}?utm_source=generator&theme=0`;
 }
 
+// Συμπίεση εικόνας από τη συλλογή ώστε να αποθηκεύεται με ασφάλεια στο localStorage
+function compressImage(file, maxWidth = 1920, quality = 0.78) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = event.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function FocusArea({ tasks, isActive = true }) {
   const today = todayStr();
 
@@ -95,6 +119,9 @@ export default function FocusArea({ tasks, isActive = true }) {
   const [customBgUrl, setCustomBgUrl] = useState(() => localStorage.getItem('focus_custom_bg') || '');
   const [bgInput, setBgInput] = useState('');
   const [showThemePicker, setShowThemePicker] = useState(false);
+  const themePickerRef = useRef(null);
+  const themeBtnRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // --- StandBy / Zen Mode State ---
   const [manualZen, setManualZen] = useState(false);
@@ -125,7 +152,34 @@ export default function FocusArea({ tasks, isActive = true }) {
   useEffect(() => localStorage.setItem(statsKey, JSON.stringify(stats)), [stats, statsKey]);
   useEffect(() => localStorage.setItem('focus_spotify_url', spotifyEmbedUrl), [spotifyEmbedUrl]);
   useEffect(() => localStorage.setItem('focus_theme_id', themeId), [themeId]);
-  useEffect(() => localStorage.setItem('focus_custom_bg', customBgUrl), [customBgUrl]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('focus_custom_bg', customBgUrl);
+    } catch {
+      notify('Η εικόνα είναι πολύ μεγάλη για αποθήκευση. Δοκίμασε μια μικρότερη.');
+    }
+  }, [customBgUrl]);
+
+  // Click-outside για κλείσιμο του Theme Picker
+  useEffect(() => {
+    if (!showThemePicker) return;
+    function handleClickOutside(e) {
+      if (
+        themePickerRef.current &&
+        !themePickerRef.current.contains(e.target) &&
+        themeBtnRef.current &&
+        !themeBtnRef.current.contains(e.target)
+      ) {
+        setShowThemePicker(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [showThemePicker]);
 
   // Auto-detect mobile landscape for StandBy Mode
   useEffect(() => {
@@ -162,14 +216,14 @@ export default function FocusArea({ tasks, isActive = true }) {
     };
   }, [isZenMode]);
 
-  // Screen Wake Lock (keeps phone screen awake during Zen Mode or active timer)
+  // Screen Wake Lock
   useEffect(() => {
     async function requestWakeLock() {
       if (!('wakeLock' in navigator)) return;
       try {
         wakeLockRef.current = await navigator.wakeLock.request('screen');
       } catch {
-        // ignore if unsupported or battery saver active
+        // ignore
       }
     }
 
@@ -313,7 +367,24 @@ export default function FocusArea({ tasks, isActive = true }) {
     setCustomBgUrl(bgInput.trim());
     setThemeId('custom');
     setBgInput('');
+    setShowThemePicker(false);
     notify('Το wallpaper ενημερώθηκε!');
+  }
+
+  async function handleGalleryUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await compressImage(file);
+      setCustomBgUrl(dataUrl);
+      setThemeId('custom');
+      setShowThemePicker(false);
+      notify('Η φωτογραφία ορίστηκε ως wallpaper!');
+    } catch {
+      notify('Αποτυχία φόρτωσης εικόνας.');
+    } finally {
+      e.target.value = '';
+    }
   }
 
   const mins = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
@@ -324,7 +395,6 @@ export default function FocusArea({ tasks, isActive = true }) {
     ? todaysTasks.find((t) => t.id === selectedTaskId)?.title
     : customGoal;
 
-  // Compute active background style
   const activeTheme = THEMES.find((t) => t.id === themeId) || THEMES[0];
   const bgStyle =
     themeId === 'custom' && customBgUrl
@@ -346,7 +416,7 @@ export default function FocusArea({ tasks, isActive = true }) {
       onTouchStart={isZenMode ? resetHideTimer : undefined}
       onClick={isZenMode ? resetHideTimer : undefined}
     >
-      {/* Σκούρο απαλό overlay στο Zen Mode για τέλεια αναγνωσιμότητα */}
+      {/* Σκούρο απαλό overlay στο Zen Mode */}
       {isZenMode && <div className="pointer-events-none absolute inset-0 bg-black/45 backdrop-blur-[2px]" />}
 
       {/* --- ΚΥΡΙΑ ΣΤΗΛΗ / TIMER --- */}
@@ -357,7 +427,6 @@ export default function FocusArea({ tasks, isActive = true }) {
             : 'lg:col-span-2 space-y-5 sm:space-y-6'
         )}
       >
-        {/* Cozy Timer Card (Normal Mode) / Fullscreen Display (Zen Mode) */}
         <div
           className={cx(
             'relative overflow-hidden transition-all duration-500',
@@ -367,14 +436,13 @@ export default function FocusArea({ tasks, isActive = true }) {
           )}
           style={!isZenMode ? bgStyle : undefined}
         >
-          {/* Overlay για Normal Cozy Card */}
           {!isZenMode && <div className="pointer-events-none absolute inset-0 bg-black/40 backdrop-blur-[1px]" />}
 
-          {/* Λεπτή Progress Bar */}
+          {/* Progress Bar */}
           <div
             className={cx(
-              'fixed left-0 right-0 z-20 h-1 bg-white/10',
-              isZenMode ? 'bottom-0' : 'absolute top-0'
+              'left-0 right-0 z-20 h-1 bg-white/10',
+              isZenMode ? 'fixed bottom-0' : 'absolute top-0'
             )}
           >
             <div
@@ -384,7 +452,7 @@ export default function FocusArea({ tasks, isActive = true }) {
           </div>
 
           <div className="relative z-10 w-full">
-            {/* Top Bar σε Normal Mode: Presets + Zen Mode Button */}
+            {/* Top Bar σε Normal Mode */}
             {!isZenMode && (
               <div className="mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
                 <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
@@ -426,6 +494,7 @@ export default function FocusArea({ tasks, isActive = true }) {
                   </form>
 
                   <button
+                    ref={themeBtnRef}
                     onClick={() => setShowThemePicker((v) => !v)}
                     className="rounded-xl bg-white/15 p-2 text-white backdrop-blur-md transition hover:bg-white/25"
                     title="Αλλαγή Wallpaper / Theme"
@@ -445,14 +514,20 @@ export default function FocusArea({ tasks, isActive = true }) {
               </div>
             )}
 
-            {/* Theme Picker Drawer (Normal Mode) */}
+            {/* Theme Picker Drawer (Κλείνει με click έξω) */}
             {!isZenMode && showThemePicker && (
-              <div className="mb-6 rounded-2xl border border-white/15 bg-black/50 p-3.5 backdrop-blur-md animate-fadeIn">
-                <div className="mb-2.5 flex flex-wrap gap-2">
+              <div
+                ref={themePickerRef}
+                className="mb-6 rounded-2xl border border-white/15 bg-black/60 p-3.5 backdrop-blur-xl animate-fadeIn space-y-3"
+              >
+                <div className="flex flex-wrap gap-2">
                   {THEMES.map((t) => (
                     <button
                       key={t.id}
-                      onClick={() => setThemeId(t.id)}
+                      onClick={() => {
+                        setThemeId(t.id);
+                        setShowThemePicker(false);
+                      }}
                       className={cx(
                         'rounded-lg px-2.5 py-1 text-xs font-medium transition border',
                         themeId === t.id
@@ -463,11 +538,33 @@ export default function FocusArea({ tasks, isActive = true }) {
                       {t.name}
                     </button>
                   ))}
+
+                  {/* Επιλογή φωτογραφίας από Συλλογή κινητού / PC */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleGalleryUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className={cx(
+                      'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition border',
+                      themeId === 'custom'
+                        ? 'bg-amber-200 text-stone-900 border-amber-200'
+                        : 'bg-white/20 text-white border-white/20 hover:bg-white/30'
+                    )}
+                  >
+                    <Upload className="h-3.5 w-3.5" /> Από Συλλογή
+                  </button>
                 </div>
+
                 <form onSubmit={handleCustomBgSubmit} className="flex gap-2">
                   <input
                     className="flex-1 rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-xs text-white placeholder-white/50 outline-none focus:border-white/40"
-                    placeholder="Ή βάλε δικό σου image URL (https://...)"
+                    placeholder="Ή βάλε image URL (https://...)"
                     value={bgInput}
                     onChange={(e) => setBgInput(e.target.value)}
                   />
@@ -482,7 +579,7 @@ export default function FocusArea({ tasks, isActive = true }) {
             )}
 
             {/* Ενεργός Στόχος */}
-            <div className={cx('text-center', isZenMode ? 'mb-2' : 'mb-3')}>
+            <div className={cx('text-center', isZenMode ? 'mb-3' : 'mb-3')}>
               {activeGoalText ? (
                 <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-xs font-medium text-amber-100 backdrop-blur-md">
                   <Target className="h-3.5 w-3.5 shrink-0 text-amber-300" />
@@ -495,28 +592,29 @@ export default function FocusArea({ tasks, isActive = true }) {
               )}
             </div>
 
-            {/* Τεράστιο Minimal Χρονόμετρο */}
-            <div className={cx('text-center', isZenMode ? 'my-2' : 'my-5 sm:my-7')}>
+            {/* Τεράστιο Minimal Χρονόμετρο (Απόλυτα κεντραρισμένο) */}
+            <div className={cx('text-center', isZenMode ? '' : 'my-5 sm:my-7')}>
               <div
                 className={cx(
-                  'font-mono font-light tracking-tight text-white drop-shadow-sm select-none leading-none',
+                  'font-timer font-light tracking-tight text-white drop-shadow-sm select-none leading-none',
                   isZenMode
-                    ? 'text-[22vw] sm:text-[18vw] lg:text-[11rem]'
-                    : 'text-6xl sm:text-8xl'
+                    ? 'text-[23vw] sm:text-[19vw] lg:text-[12rem]'
+                    : 'text-7xl sm:text-8xl'
                 )}
               >
                 {mins}:{secs}
               </div>
             </div>
 
-            {/* Κουμπιά Ελέγχου (Auto-hide στο Zen Mode) */}
+            {/* Κουμπιά Ελέγχου: Normal Mode (inline) vs Zen Mode (fixed κάτω ώστε να μην σπρώχνουν το ρολόι) */}
             <div
               className={cx(
                 'flex items-center justify-center gap-3 transition-opacity duration-500',
                 isZenMode
-                  ? showZenControls
-                    ? 'mt-6 opacity-100'
-                    : 'mt-6 opacity-0 pointer-events-none'
+                  ? cx(
+                      'fixed bottom-7 left-1/2 -translate-x-1/2 z-30',
+                      showZenControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    )
                   : 'mt-6 sm:mt-8 opacity-100'
               )}
               onClick={(e) => e.stopPropagation()}
@@ -559,7 +657,7 @@ export default function FocusArea({ tasks, isActive = true }) {
           </div>
         </div>
 
-        {/* Επιλογή Στόχου (Κρύβεται στο Zen Mode) */}
+        {/* Επιλογή Στόχου */}
         {!isZenMode && (
           <div className="rounded-3xl border border-stone-200/70 bg-white/80 p-4 sm:p-5 shadow-sm backdrop-blur-sm">
             <h3 className="mb-3.5 flex items-center gap-2 text-sm font-semibold text-stone-800">
@@ -607,7 +705,6 @@ export default function FocusArea({ tasks, isActive = true }) {
 
       {/* --- ΔΕΞΙΑ ΣΤΗΛΗ: STATS, SPOTIFY & BRAIN DUMP --- */}
       <div className={cx(isZenMode ? '' : 'space-y-5 sm:space-y-6')}>
-        {/* Σημερινά Στατιστικά (Κρύβονται στο Zen Mode) */}
         {!isZenMode && (
           <div className="rounded-3xl bg-stone-900 p-5 text-white shadow-sm">
             <div className="mb-3 flex items-center justify-between">
@@ -618,18 +715,18 @@ export default function FocusArea({ tasks, isActive = true }) {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-3xl font-light">{stats.sessions}</p>
+                <p className="font-timer text-3xl font-light">{stats.sessions}</p>
                 <p className="mt-0.5 text-xs text-stone-400">Sessions</p>
               </div>
               <div>
-                <p className="text-3xl font-light">{stats.minutes}'</p>
+                <p className="font-timer text-3xl font-light">{stats.minutes}'</p>
                 <p className="mt-0.5 text-xs text-stone-400">Καθαρός Χρόνος</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Διακριτικό κουμπί Spotify στο Zen Mode (Κάτω δεξιά) */}
+        {/* Κουμπί Spotify στο Zen Mode */}
         {isZenMode && (
           <button
             onClick={(e) => {
@@ -637,7 +734,7 @@ export default function FocusArea({ tasks, isActive = true }) {
               setZenSpotifyOpen((v) => !v);
             }}
             className={cx(
-              'fixed bottom-5 right-5 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white backdrop-blur-md transition-all duration-300 hover:bg-black/60',
+              'fixed bottom-7 right-5 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white backdrop-blur-md transition-all duration-300 hover:bg-black/60',
               showZenControls || zenSpotifyOpen ? 'opacity-100' : 'opacity-25 hover:opacity-100'
             )}
             title="Έλεγχος Spotify"
@@ -646,7 +743,7 @@ export default function FocusArea({ tasks, isActive = true }) {
           </button>
         )}
 
-        {/* SPOTIFY CONTAINER: Ένα μόνο iframe που δεν γίνεται ΠΟΤΕ unmount */}
+        {/* SPOTIFY CONTAINER */}
         <div
           onClick={(e) => e.stopPropagation()}
           className={cx(
@@ -703,7 +800,7 @@ export default function FocusArea({ tasks, isActive = true }) {
           )}
         </div>
 
-        {/* Brain Dump (Κρύβεται στο Zen Mode) */}
+        {/* Brain Dump */}
         {!isZenMode && (
           <div className="rounded-3xl border border-stone-200/70 bg-white/80 p-4 sm:p-5 shadow-sm backdrop-blur-sm">
             <div className="mb-2 flex items-center justify-between">
